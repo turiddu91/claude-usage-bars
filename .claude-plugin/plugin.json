@@ -1,0 +1,9 @@
+{
+  "name": "usage-bars",
+  "version": "0.1.0",
+  "description": "Always-visible usage limit bars (5-hour and weekly) above the prompt, with per-chat consumption, reset times, alerts and settings",
+  "author": { "name": "turiddu91" },
+  "license": "MIT",
+  "repository": "https://github.com/turiddu91/claude-usage-bars",
+  "types": "./types/index.d.ts"
+}
