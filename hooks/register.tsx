@@ -122,7 +122,17 @@ function forecast(l: Limit, sample: Sample | undefined, now: number): string {
   const eta = now + ((100 - l.percentUsed) / dp) * dt
   const reset = Date.parse(l.resetsAt)
   if (!Number.isFinite(reset) || eta >= reset) return ''
-  return `⚠ finisce ${clock(eta, reset - now > 20 * 3600 * 1000)}`
+  return `⚠ A questo ritmo arrivi al 100% ${dayDate(eta, now)}, prima del reset`
+}
+
+const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic']
+
+/** "oggi 18:30", oppure "sab 21 nov 04:30". */
+function dayDate(ms: number, now: number): string {
+  const d = new Date(ms)
+  const hm = clock(ms, false)
+  if (d.toDateString() === new Date(now).toDateString()) return `oggi alle ${hm}`
+  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} alle ${hm}`
 }
 
 function tokens(n: number): string {
@@ -289,20 +299,29 @@ export const register: Register = on => {
           const mine = s.showChat ? sp.share[l.kind] : undefined
           const warn = forecast(l, smp[l.kind], now)
           return (
-            <Box key={l.kind} flexDirection="row" columnGap={1} alignItems="center">
-              <Box key="lbl" minWidth={14}>
-                <Text dimColor>{LABELS[l.kind] ?? l.kind}</Text>
+            <Box key={l.kind} flexDirection="column">
+              <Box key="row" flexDirection="row" columnGap={1} alignItems="center">
+                <Box key="lbl" minWidth={14}>
+                  <Text dimColor>{LABELS[l.kind] ?? l.kind}</Text>
+                </Box>
+                {barOf(l, false)}
+                <Box key="pct" minWidth={5}>
+                  <Text bold>{Math.round(l.percentUsed)}%</Text>
+                </Box>
+                <Box key="info" flexShrink={1}>
+                  <Text dimColor wrap="truncate-end">
+                    {details([mine !== undefined ? `chat ~${pct(mine)}%` : '', resetText(l, now)])}
+                  </Text>
+                </Box>
               </Box>
-              {barOf(l, false)}
-              <Box key="pct" minWidth={5}>
-                <Text bold>{Math.round(l.percentUsed)}%</Text>
-              </Box>
-              <Box key="info" flexShrink={1}>
-                <Text dimColor wrap="truncate-end">
-                  {details([mine !== undefined ? `chat ~${pct(mine)}%` : '', resetText(l, now)])}
-                  {warn ? <Text color={LIGHTS.warn}>{`  ${warn}`}</Text> : null}
-                </Text>
-              </Box>
+              {warn ? (
+                <Box key="warn" flexDirection="row" columnGap={1}>
+                  <Box key="lbl" minWidth={14}>
+                    <Text> </Text>
+                  </Box>
+                  <Text color={LIGHTS.warn}>{warn}</Text>
+                </Box>
+              ) : null}
             </Box>
           )
         })}
