@@ -2,13 +2,11 @@
 
 Always-visible usage limit bars for **Claude Code**, drawn right above the prompt — in the desktop app (Code tab) and in the terminal. No more opening the settings to check how much of your limits you have left.
 
-*Barre sempre visibili dei limiti di utilizzo di Claude Code, sopra il prompt: niente più impostazioni da aprire. (Interfaccia in italiano.)*
+![Usage bars above the prompt](docs/preview.svg)
 
-```
-Sessione (5h)  ━━━━━━━━━━━━━━━━━━━━  61%  chat ~1,0% · reset 16:00 (tra 28m)        ⚙
-Settimana      ━━━━━━━━━━━━━━━━━━━━   8%  chat ~0,4% · reset mar 07:00 (tra 4g 15h)
-Questa chat    3,8M token · 3,8M da cache · ~$4,95 se pagata a consumo
-```
+*The picture is a mock-up of how the bars look in the desktop app.*
+
+*Barre sempre visibili dei limiti di utilizzo di Claude Code, sopra il prompt. Interfaccia in inglese e in italiano.*
 
 ## What it shows
 
@@ -21,7 +19,7 @@ Questa chat    3,8M token · 3,8M da cache · ~$4,95 se pagata a consumo
 
 ## Settings (⚙)
 
-Click the ⚙ at the top right of the bars: colour (traffic light or a fixed colour), yellow/red thresholds, bar length, which rows to show, compact one-line mode, alerts on/off. Settings are saved and apply to every chat.
+Click the ⚙ at the top right of the bars: colour (traffic light or a fixed colour), yellow/red thresholds, bar length, which rows to show, compact one-line mode, alerts on/off, language (English or Italian; automatic follows your system). Settings are saved and apply to every chat.
 
 ## Install
 

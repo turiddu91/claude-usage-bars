@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { BarStyle, Limit, Sample, SessionSpend, Settings } from '../types'
+import type { BarStyle, Lang, Limit, Sample, SessionSpend, Settings } from '../types'
 
 const DEFAULTS: Settings = {
   color: 'auto',
@@ -14,6 +14,7 @@ const DEFAULTS: Settings = {
   width: 20,
   compact: false,
   alerts: true,
+  lang: 'auto',
 }
 
 const limits = atom({ plugin: 'usage-bars', key: 'limits' } as const, [] as Limit[])
@@ -29,22 +30,129 @@ const panelOpen = atom({ plugin: 'usage-bars', key: 'panelOpen' } as const, fals
 const samples = atom({ plugin: 'usage-bars', key: 'samples' } as const, {} as Record<string, Sample>)
 const alerted = atom({ plugin: 'usage-bars', key: 'alerted' } as const, {} as Record<string, number>)
 
-const LABELS: Record<string, string> = {
-  five_hour: 'Sessione (5h)',
-  seven_day: 'Settimana',
-  spend_limit: 'Spesa',
-}
-const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'Sett.', spend_limit: 'Spesa' }
+// ---------- testi ----------
 
-const COLORS: { label: string; value: string }[] = [
-  { label: 'Automatico (semaforo)', value: 'auto' },
-  { label: 'Blu', value: '#4f8ff7' },
-  { label: 'Viola', value: '#a779f2' },
-  { label: 'Ciano', value: '#3cc4d6' },
-  { label: 'Arancio', value: '#f2994a' },
-  { label: 'Rosa', value: '#ec6fae' },
-  { label: 'Grigio', value: '#9aa0a6' },
-]
+type Dict = {
+  labels: Record<string, string>
+  short: Record<string, string>
+  days: string[]
+  months: string[]
+  dayUnit: string
+  decimal: string
+  resets: (when: string, left: string) => string
+  forecast: (when: string) => string
+  today: (hm: string) => string
+  date: (dow: string, day: number, month: string, hm: string) => string
+  thisChat: string
+  tokenWord: string
+  fromCache: string
+  payg: (usd: string) => string
+  allHidden: string
+  toast: (label: string, p: number, reset: string) => string
+  colors: string[]
+  color: string
+  yellowFrom: string
+  redFrom: string
+  length: string
+  lengths: [string, string, string]
+  style: string
+  styles: [string, string, string]
+  language: string
+  langAuto: string
+  fiveHours: string
+  week: string
+  alerts: string
+  compact: string
+  reset: string
+  done: string
+}
+
+const TEXTS: Record<'en' | 'it', Dict> = {
+  en: {
+    labels: { five_hour: 'Session (5h)', seven_day: 'Week', spend_limit: 'Spend' },
+    short: { five_hour: '5h', seven_day: 'Week', spend_limit: 'Spend' },
+    days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    dayUnit: 'd',
+    decimal: '.',
+    resets: (when, left) => `resets ${when} (in ${left})`,
+    forecast: when => `⚠ At this pace you'll hit 100% ${when}, before the reset`,
+    today: hm => `today at ${hm}`,
+    date: (dow, day, month, hm) => `${dow} ${month} ${day} at ${hm}`,
+    thisChat: 'This chat',
+    tokenWord: 'tokens',
+    fromCache: 'from cache',
+    payg: usd => `~$${usd} at API prices`,
+    allHidden: 'All rows are hidden: open ⚙',
+    toast: (label, p, reset) => `${label}: ${p}% of the limit used · ${reset}`,
+    colors: ['Automatic (traffic light)', 'Blue', 'Purple', 'Cyan', 'Orange', 'Pink', 'Grey'],
+    color: 'Colour',
+    yellowFrom: 'Yellow from',
+    redFrom: 'Red from',
+    length: 'Length',
+    lengths: ['Short', 'Medium', 'Long'],
+    style: 'Style',
+    styles: ['█░ solid', '■□ squares', '●○ dots'],
+    language: 'Language',
+    langAuto: 'Automatic',
+    fiveHours: '5 hours',
+    week: 'Week',
+    alerts: 'Alerts',
+    compact: 'Compact',
+    reset: 'Reset',
+    done: 'Done',
+  },
+  it: {
+    labels: { five_hour: 'Sessione (5h)', seven_day: 'Settimana', spend_limit: 'Spesa' },
+    short: { five_hour: '5h', seven_day: 'Sett.', spend_limit: 'Spesa' },
+    days: ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'],
+    months: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'],
+    dayUnit: 'g',
+    decimal: ',',
+    resets: (when, left) => `reset ${when} (tra ${left})`,
+    forecast: when => `⚠ A questo ritmo arrivi al 100% ${when}, prima del reset`,
+    today: hm => `oggi alle ${hm}`,
+    date: (dow, day, month, hm) => `${dow} ${day} ${month} alle ${hm}`,
+    thisChat: 'Questa chat',
+    tokenWord: 'token',
+    fromCache: 'da cache',
+    payg: usd => `~$${usd} se pagata a consumo`,
+    allHidden: 'Tutte le righe sono nascoste: apri ⚙',
+    toast: (label, p, reset) => `${label}: ${p}% del limite usato · ${reset}`,
+    colors: ['Automatico (semaforo)', 'Blu', 'Viola', 'Ciano', 'Arancio', 'Rosa', 'Grigio'],
+    color: 'Colore',
+    yellowFrom: 'Giallo da',
+    redFrom: 'Rosso da',
+    length: 'Lunghezza',
+    lengths: ['Corta', 'Media', 'Lunga'],
+    style: 'Stile',
+    styles: ['█░ pieno', '■□ quadretti', '●○ pallini'],
+    language: 'Lingua',
+    langAuto: 'Automatica',
+    fiveHours: '5 ore',
+    week: 'Settimana',
+    alerts: 'Avvisi',
+    compact: 'Compatta',
+    reset: 'Ripristina',
+    done: 'Fatto',
+  },
+}
+
+/** La lingua del sistema, se si riesce a leggerla. */
+function systemLang(): 'en' | 'it' {
+  try {
+    const loc = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : ''
+    return loc.toLowerCase().startsWith('it') ? 'it' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+function dict(lang: Lang): Dict {
+  return TEXTS[lang === 'auto' ? systemLang() : lang] ?? TEXTS.en
+}
+
+const COLOR_VALUES = ['auto', '#4f8ff7', '#a779f2', '#3cc4d6', '#f2994a', '#ec6fae', '#9aa0a6']
 
 /** Il semaforo in esadecimale: serve all'SVG, che non conosce i colori del tema. */
 const LIGHTS = { ok: '#3fb950', warn: '#d29922', crit: '#f85149' }
@@ -57,8 +165,6 @@ const GLYPHS: Record<BarStyle, [string, string]> = {
 
 /** Lunghezza della barra: celle nel terminale, pixel su desktop. */
 const PIXELS: Record<number, number> = { 10: 110, 20: 180, 30: 260 }
-
-const DAYS = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab']
 
 // ---------- formattazione ----------
 
@@ -87,32 +193,42 @@ function hex(pct: number, s: Settings): string {
   return LIGHTS.ok
 }
 
-function clock(ms: number, withDay: boolean): string {
+function hm(ms: number): string {
   const d = new Date(ms)
-  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return withDay ? `${DAYS[d.getDay()]} ${hm}` : hm
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function duration(ms: number): string {
+function clock(ms: number, withDay: boolean, t: Dict): string {
+  return withDay ? `${t.days[new Date(ms).getDay()]} ${hm(ms)}` : hm(ms)
+}
+
+function duration(ms: number, t: Dict): string {
   const mins = Math.max(0, Math.round(ms / 60000))
   const d = Math.floor(mins / 1440)
   const h = Math.floor((mins % 1440) / 60)
   const m = mins % 60
-  if (d > 0) return `${d}g ${h}h`
+  if (d > 0) return `${d}${t.dayUnit} ${h}h`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
 }
 
-function resetText(l: Limit, now: number): string {
+function resetText(l: Limit, now: number, t: Dict): string {
   if (!l.resetsAt) return ''
   const at = Date.parse(l.resetsAt)
   if (!Number.isFinite(at) || at <= now) return ''
   const longWindow = at - now > 20 * 3600 * 1000
-  return `reset ${clock(at, longWindow)} (tra ${duration(at - now)})`
+  return t.resets(clock(at, longWindow, t), duration(at - now, t))
+}
+
+/** "oggi alle 18:30", oppure "sab 21 nov alle 04:30". */
+function dayDate(ms: number, now: number, t: Dict): string {
+  const d = new Date(ms)
+  if (d.toDateString() === new Date(now).toDateString()) return t.today(hm(ms))
+  return t.date(t.days[d.getDay()] ?? "", d.getDate(), t.months[d.getMonth()] ?? "", hm(ms))
 }
 
 /** Al ritmo visto da questa chat, quando si arriva al 100%? Solo se prima del reset. */
-function forecast(l: Limit, sample: Sample | undefined, now: number): string {
+function forecast(l: Limit, sample: Sample | undefined, now: number, t: Dict): string {
   if (!sample || !l.resetsAt || sample.resetsAt !== l.resetsAt) return ''
   const dt = now - sample.t
   const dp = l.percentUsed - sample.pct
@@ -122,27 +238,21 @@ function forecast(l: Limit, sample: Sample | undefined, now: number): string {
   const eta = now + ((100 - l.percentUsed) / dp) * dt
   const reset = Date.parse(l.resetsAt)
   if (!Number.isFinite(reset) || eta >= reset) return ''
-  return `⚠ A questo ritmo arrivi al 100% ${dayDate(eta, now)}, prima del reset`
+  return t.forecast(dayDate(eta, now, t))
 }
 
-const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic']
-
-/** "oggi 18:30", oppure "sab 21 nov 04:30". */
-function dayDate(ms: number, now: number): string {
-  const d = new Date(ms)
-  const hm = clock(ms, false)
-  if (d.toDateString() === new Date(now).toDateString()) return `oggi alle ${hm}`
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} alle ${hm}`
+function num(n: number, digits: number, t: Dict): string {
+  return n.toFixed(digits).replace('.', t.decimal)
 }
 
-function tokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')}M`
+function tokens(n: number, t: Dict): string {
+  if (n >= 1_000_000) return `${num(n / 1_000_000, 1, t)}M`
   if (n >= 1_000) return `${Math.round(n / 1_000)}k`
   return String(n)
 }
 
-function pct(n: number): string {
-  return n < 10 ? n.toFixed(1).replace('.', ',') : String(Math.round(n))
+function pct(n: number, t: Dict): string {
+  return n < 10 ? num(n, 1, t) : String(Math.round(n))
 }
 
 function visible(l: Limit, s: Settings): boolean {
@@ -190,6 +300,7 @@ async function ingest($: EngineInterface, rl: readonly Limit[]) {
 
   const s = await read($, settings)
   if (!s.alerts) return
+  const t = dict(s.lang)
   const done = await read($, alerted)
   const fresh: Record<string, number> = {}
   for (const r of rl) {
@@ -198,7 +309,7 @@ async function ingest($: EngineInterface, rl: readonly Limit[]) {
     if (level > (done[key] ?? 0)) {
       fresh[key] = level
       $.ui.toast(
-        `${level === 2 ? '🔴' : '🟡'} ${LABELS[r.kind] ?? r.kind}: ${Math.round(r.percentUsed)}% del limite usato · ${resetText(r, now)}`,
+        `${level === 2 ? '🔴' : '🟡'} ${t.toast(t.labels[r.kind] ?? r.kind, Math.round(r.percentUsed), resetText(r, now, t))}`,
       )
     }
   }
@@ -215,7 +326,10 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const saved = await $.store.get('settings')
     if (saved && typeof saved === 'object') {
-      await update($, settings, () => ({ ...DEFAULTS, ...(saved as Partial<Settings>) }))
+      const prev = saved as Partial<Settings>
+      // Chi aveva già la versione solo italiana la ritrova in italiano.
+      const lang: Lang = prev.lang ?? 'it'
+      await update($, settings, () => ({ ...DEFAULTS, ...prev, lang }))
     }
     const usage = await $.session.usage()
     if (usage.rateLimits.length > 0) await ingest($, usage.rateLimits)
@@ -255,6 +369,7 @@ export const register: Register = on => {
     }
 
     const s = await read($, settings)
+    const t = dict(s.lang)
     const open = await read($, panelOpen)
     const smp = await read($, samples)
     const now = await $.clock.now()
@@ -264,13 +379,14 @@ export const register: Register = on => {
 
     const shown = list.filter(l => visible(l, s))
     const total = sp.tokens + sp.cacheRead
+    const label = (l: Limit) => t.labels[l.kind] ?? l.kind
 
     const barOf = (l: Limit, small: boolean) =>
       Svg ? (
         <Svg
           key={`bar-${l.kind}`}
           source={svgBar(l.percentUsed, hex(l.percentUsed, s), small ? 70 : PIXELS[s.width] ?? 180)}
-          alt={`${LABELS[l.kind] ?? l.kind}: ${Math.round(l.percentUsed)}%`}
+          alt={`${label(l)}: ${Math.round(l.percentUsed)}%`}
         />
       ) : (
         <Text key={`bar-${l.kind}`} color={hex(l.percentUsed, s)}>
@@ -283,26 +399,26 @@ export const register: Register = on => {
       <Box key="compact" flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
         {shown.map(l => (
           <Box key={l.kind} flexDirection="row" columnGap={1} alignItems="center">
-            <Text dimColor>{SHORT[l.kind] ?? l.kind}</Text>
+            <Text dimColor>{t.short[l.kind] ?? l.kind}</Text>
             {barOf(l, true)}
             <Text bold>{Math.round(l.percentUsed)}%</Text>
             {s.showChat && sp.share[l.kind] !== undefined ? (
-              <Text dimColor>chat ~{pct(sp.share[l.kind])}%</Text>
+              <Text dimColor>chat ~{pct(sp.share[l.kind] ?? 0, t)}%</Text>
             ) : null}
           </Box>
         ))}
-        {s.showChat ? <Text dimColor>chat {tokens(total)} token</Text> : null}
+        {s.showChat ? <Text dimColor>chat {tokens(total, t)} {t.tokenWord}</Text> : null}
       </Box>
     ) : (
       <Box key="full" flexDirection="column" rowGap={0}>
         {shown.map(l => {
           const mine = s.showChat ? sp.share[l.kind] : undefined
-          const warn = forecast(l, smp[l.kind], now)
+          const warn = forecast(l, smp[l.kind], now, t)
           return (
             <Box key={l.kind} flexDirection="column">
               <Box key="row" flexDirection="row" columnGap={1} alignItems="center">
                 <Box key="lbl" minWidth={14}>
-                  <Text dimColor>{LABELS[l.kind] ?? l.kind}</Text>
+                  <Text dimColor>{label(l)}</Text>
                 </Box>
                 {barOf(l, false)}
                 <Box key="pct" minWidth={5}>
@@ -310,7 +426,7 @@ export const register: Register = on => {
                 </Box>
                 <Box key="info" flexShrink={1}>
                   <Text dimColor wrap="truncate-end">
-                    {details([mine !== undefined ? `chat ~${pct(mine)}%` : '', resetText(l, now)])}
+                    {details([mine !== undefined ? `chat ~${pct(mine, t)}%` : '', resetText(l, now, t)])}
                   </Text>
                 </Box>
               </Box>
@@ -328,26 +444,28 @@ export const register: Register = on => {
         {s.showChat ? (
           <Box key="chat" flexDirection="row" columnGap={1}>
             <Box key="lbl" minWidth={14}>
-              <Text dimColor>Questa chat</Text>
+              <Text dimColor>{t.thisChat}</Text>
             </Box>
-            <Text>{tokens(total)} token</Text>
+            <Text>
+              {tokens(total, t)} {t.tokenWord}
+            </Text>
             <Text dimColor>
               {details([
-                sp.cacheRead > 0 ? `${tokens(sp.cacheRead)} da cache` : '',
-                sp.usd > 0 ? `~$${sp.usd.toFixed(2).replace('.', ',')} se pagata a consumo` : '',
+                sp.cacheRead > 0 ? `${tokens(sp.cacheRead, t)} ${t.fromCache}` : '',
+                sp.usd > 0 ? t.payg(num(sp.usd, 2, t)) : '',
               ])}
             </Text>
           </Box>
         ) : null}
-        {shown.length === 0 && !s.showChat ? <Text dimColor>Tutte le righe sono nascoste: apri ⚙</Text> : null}
+        {shown.length === 0 && !s.showChat ? <Text dimColor>{t.allHidden}</Text> : null}
       </Box>
     )
 
     // ----- pannello impostazioni -----
-    const toggle = (key: string, label: string, isOn: boolean, patch: Partial<Settings>) => (
+    const toggle = (key: string, text: string, isOn: boolean, patch: Partial<Settings>) => (
       <Button
         key={key}
-        label={`${isOn ? '✓' : '○'} ${label}`}
+        label={`${isOn ? '✓' : '○'} ${text}`}
         dimColor={!isOn}
         onPress={() => saveSettings($, patch)}
       />
@@ -358,58 +476,61 @@ export const register: Register = on => {
         <Box key="selects" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1}>
           <Select
             key="sel-color"
-            label="Colore"
+            label={t.color}
             value={s.color}
-            options={COLORS}
+            options={COLOR_VALUES.map((value, i) => ({ value, label: t.colors[i] }))}
             onSelect={v => void saveSettings($, { color: v })}
           />
           <Select
             key="sel-warn"
-            label="Giallo da"
+            label={t.yellowFrom}
             value={String(s.warn)}
             options={[50, 60, 70, 80].map(v => ({ value: String(v), label: `${v}%` }))}
             onSelect={v => void saveSettings($, { warn: Number(v) })}
           />
           <Select
             key="sel-crit"
-            label="Rosso da"
+            label={t.redFrom}
             value={String(s.crit)}
             options={[80, 85, 90, 95].map(v => ({ value: String(v), label: `${v}%` }))}
             onSelect={v => void saveSettings($, { crit: Number(v) })}
           />
           <Select
             key="sel-width"
-            label="Lunghezza"
+            label={t.length}
             value={String(s.width)}
-            options={[
-              { value: '10', label: 'Corta' },
-              { value: '20', label: 'Media' },
-              { value: '30', label: 'Lunga' },
-            ]}
+            options={['10', '20', '30'].map((value, i) => ({ value, label: t.lengths[i] }))}
             onSelect={v => void saveSettings($, { width: Number(v) })}
           />
           {Svg ? null : (
             <Select
               key="sel-style"
-              label="Stile"
+              label={t.style}
               value={s.style}
-              options={[
-                { value: 'block', label: '█░ pieno' },
-                { value: 'square', label: '■□ quadretti' },
-                { value: 'dot', label: '●○ pallini' },
-              ]}
+              options={(['block', 'square', 'dot'] as const).map((value, i) => ({ value, label: t.styles[i] }))}
               onSelect={v => void saveSettings($, { style: v as BarStyle })}
             />
           )}
+          <Select
+            key="sel-lang"
+            label={t.language}
+            value={s.lang}
+            options={[
+              { value: 'auto', label: t.langAuto },
+              { value: 'en', label: 'English' },
+              { value: 'it', label: 'Italiano' },
+            ]}
+            onSelect={v => void saveSettings($, { lang: v as Lang })}
+          />
         </Box>
         <Box key="toggles" flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={1}>
-          {toggle('t-5', '5 ore', s.showFive, { showFive: !s.showFive })}
-          {toggle('t-w', 'Settimana', s.showWeek, { showWeek: !s.showWeek })}
-          {toggle('t-c', 'Questa chat', s.showChat, { showChat: !s.showChat })}
-          {toggle('t-a', 'Avvisi', s.alerts, { alerts: !s.alerts })}
-          {toggle('t-k', 'Compatta', s.compact, { compact: !s.compact })}
-          <Button key="t-reset" label="Ripristina" dimColor onPress={() => saveSettings($, { ...DEFAULTS })} />
-          <Button key="t-close" label="Fatto" variant="primary" onPress={() => update($, panelOpen, () => false)} />
+          {toggle('t-5', t.fiveHours, s.showFive, { showFive: !s.showFive })}
+          {toggle('t-w', t.week, s.showWeek, { showWeek: !s.showWeek })}
+          {toggle('t-c', t.thisChat, s.showChat, { showChat: !s.showChat })}
+          {toggle('t-a', t.alerts, s.alerts, { alerts: !s.alerts })}
+          {toggle('t-k', t.compact, s.compact, { compact: !s.compact })}
+          <Button key="t-reset" label={t.reset} dimColor onPress={() => saveSettings($, { ...DEFAULTS, lang: s.lang })} />
+          <Button key="t-close" label={t.done} variant="primary" onPress={() => update($, panelOpen, () => false)} />
         </Box>
       </Box>
     ) : null

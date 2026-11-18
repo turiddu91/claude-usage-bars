@@ -19,6 +19,9 @@ export type Sample = { t: number; pct: number; resetsAt?: string }
 
 export type BarStyle = 'block' | 'square' | 'dot'
 
+/** 'auto' = lingua del sistema (italiano se è italiano, altrimenti inglese). */
+export type Lang = 'auto' | 'en' | 'it'
+
 /** Le preferenze, salvate in $.store e valide in tutte le chat. */
 export type Settings = {
   /** 'auto' = semaforo secondo le soglie; altrimenti un colore fisso (hex). */
@@ -32,6 +35,7 @@ export type Settings = {
   width: number
   compact: boolean
   alerts: boolean
+  lang: Lang
 }
 
 declare module 'claude-code' {
