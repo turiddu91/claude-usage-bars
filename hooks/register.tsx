@@ -233,7 +233,7 @@ function forecast(l: Limit, sample: Sample | undefined, now: number, t: Dict): s
   const dt = now - sample.t
   const dp = l.percentUsed - sample.pct
   // La finestra settimanale va osservata più a lungo, o un'ora intensa sembra la norma.
-  const minObserve = l.kind === 'seven_day' ? 3 * 3600 * 1000 : 10 * 60000
+  const minObserve = l.kind === 'seven_day' ? 3 * 3600 * 1000 : 30 * 60000
   if (dt < minObserve || dp <= 0) return ''
   const eta = now + ((100 - l.percentUsed) / dp) * dt
   const reset = Date.parse(l.resetsAt)
