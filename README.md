@@ -2,9 +2,7 @@
 
 Always-visible usage limit bars for **Claude Code**, drawn right above the prompt — in the desktop app (Code tab) and in the terminal. No more opening the settings to check how much of your limits you have left.
 
-![Usage bars above the prompt](docs/preview.svg)
-
-*The picture is a mock-up of how the bars look in the desktop app.*
+![Usage bars above the prompt in the Claude desktop app](docs/screenshot.png)
 
 *Barre sempre visibili dei limiti di utilizzo di Claude Code, sopra il prompt. Interfaccia in inglese e in italiano.*
 
