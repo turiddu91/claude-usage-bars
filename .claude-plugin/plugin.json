@@ -1,6 +1,6 @@
 {
   "name": "usage-bars",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Always-visible usage limit bars (5-hour and weekly) above the prompt, with per-chat consumption, reset times, alerts and settings",
   "author": { "name": "turiddu91" },
   "license": "MIT",

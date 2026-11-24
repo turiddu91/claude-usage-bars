@@ -17,7 +17,9 @@ Always-visible usage limit bars for **Claude Code**, drawn right above the promp
 
 ## Settings (⚙)
 
-Click the ⚙ at the top right of the bars: colour (traffic light or a fixed colour), yellow/red thresholds, bar length, which rows to show, compact one-line mode, alerts on/off, language (English or Italian; automatic follows your system). Settings are saved and apply to every chat.
+Click the ⚙ at the top right of the bars: colour (traffic light or a fixed colour), yellow/red thresholds, bar length, which rows to show, compact one-line mode, alerts on/off, language (English or Italian; automatic follows your system). Settings are saved and apply to every chat, separately for each place you use Claude Code: the desktop app, VS Code and the terminal each keep their own (for example, compact in VS Code and full in the desktop app).
+
+**Hide here** turns the bars off only where you are. Type `/usage-bars` to bring them back, or to hide them without opening the panel.
 
 ## Install
 

@@ -36,6 +36,8 @@ export type Settings = {
   compact: boolean
   alerts: boolean
   lang: Lang
+  /** Barre nascoste su questa superficie (si rimettono con /usage-bars). */
+  hidden: boolean
 }
 
 declare module 'claude-code' {
@@ -44,6 +46,8 @@ declare module 'claude-code' {
       limits: Limit[]
       spend: SessionSpend
       settings: Settings
+      /** Impostazioni proprie di ogni superficie (desktop, vscode, terminal, mobile). */
+      bySurface: Record<string, Settings>
       panelOpen: boolean
       samples: Record<string, Sample>
       alerted: Record<string, number>

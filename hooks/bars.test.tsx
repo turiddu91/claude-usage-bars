@@ -23,9 +23,11 @@ for (const c of CASES) {
     on('session.usage', () => ({
       value: { startedAt: 0, context: { window: 200000 }, rateLimits: LIMITS, cost: { usd: 1.5 } },
     }))
+    on('session.surfaces', () => ({ value: ['desktop'] }))
+    on('command.register', () => ({ value: undefined }))
     on('clock.now', () => ({ value: Date.parse('2026-11-12T14:30:00Z') }))
     on('ui.toast', () => ({ value: undefined }))
-    on('store.get', () => ({ value: c.saved }))
+    on('store.get', (_, e) => ({ value: e.key === 'settings' ? c.saved : undefined }))
     on('store.set', () => ({ value: undefined }))
 
     await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
@@ -42,3 +44,42 @@ for (const c of CASES) {
     }
   })
 }
+
+test('impostazioni separate per superficie e /usage-bars', async ($, on) => {
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { window: 200000 }, rateLimits: LIMITS, cost: { usd: 1.5 } },
+  }))
+  on('session.surfaces', () => ({ value: ['vscode'] }))
+  on('command.register', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: Date.parse('2026-11-12T14:30:00Z') }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('store.get', (_, e) => ({ value: e.key === 'settings' ? { lang: 'en' } : undefined }))
+  on('store.set', () => ({ value: undefined }))
+
+  await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
+
+  // Modalità compatta attivata in VS Code: la riga lunga "Session (5h)" sparisce solo lì.
+  const vs = await $.ui.mount({ ...BAND, surface: 'vscode' })
+  await vs.press({ key: 'gear' })
+  await vs.press({ key: 't-k' })
+  expect(await vs.find({ type: 'Text', text: /\(5h\)/ })).toBeFalsy()
+  await vs.unmount()
+
+  const desk = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect((await desk.find({ type: 'Text', text: /\(5h\)/ }))?.text).toBe('Session (5h)')
+  await desk.unmount()
+
+  // /usage-bars nasconde le barre in VS Code e le rimette.
+  const hidden = await $.command.run({ command: 'usage-bars' })
+  expect(hidden.text).toContain('hidden in VS Code')
+  const gone = await $.ui.mount({ ...BAND, surface: 'vscode' })
+  expect(await gone.find({ type: 'Button', key: 'gear' })).toBeFalsy()
+  await gone.unmount()
+
+  const shown = await $.command.run({ command: 'usage-bars' })
+  expect(shown.text).toContain('shown again')
+  const back = await $.ui.mount({ ...BAND, surface: 'vscode' })
+  expect(await back.find({ type: 'Button', key: 'gear' })).toBeTruthy()
+  await back.unmount()
+})

@@ -15,6 +15,7 @@ const DEFAULTS: Settings = {
   compact: false,
   alerts: true,
   lang: 'auto',
+  hidden: false,
 }
 
 const limits = atom({ plugin: 'usage-bars', key: 'limits' } as const, [] as Limit[])
@@ -25,7 +26,10 @@ const spend = atom({ plugin: 'usage-bars', key: 'spend' } as const, {
   share: {},
   lastSeen: {},
 } as SessionSpend)
+/** Le impostazioni di prima, uguali ovunque: valgono dove una superficie non ha le sue. */
 const settings = atom({ plugin: 'usage-bars', key: 'settings' } as const, DEFAULTS)
+/** Le impostazioni di ogni superficie: app desktop, VS Code, terminale, app mobile. */
+const bySurface = atom({ plugin: 'usage-bars', key: 'bySurface' } as const, {} as Record<string, Settings>)
 const panelOpen = atom({ plugin: 'usage-bars', key: 'panelOpen' } as const, false)
 const samples = atom({ plugin: 'usage-bars', key: 'samples' } as const, {} as Record<string, Sample>)
 const alerted = atom({ plugin: 'usage-bars', key: 'alerted' } as const, {} as Record<string, number>)
@@ -65,6 +69,11 @@ type Dict = {
   compact: string
   reset: string
   done: string
+  hideHere: string
+  surfaces: Record<string, string>
+  scope: (where: string) => string
+  cmdHidden: (where: string) => string
+  cmdShown: (where: string) => string
 }
 
 const TEXTS: Record<'en' | 'it', Dict> = {
@@ -101,6 +110,11 @@ const TEXTS: Record<'en' | 'it', Dict> = {
     compact: 'Compact',
     reset: 'Reset',
     done: 'Done',
+    hideHere: 'Hide here',
+    surfaces: { desktop: 'the desktop app', vscode: 'VS Code', terminal: 'the terminal', mobile: 'the mobile app' },
+    scope: where => `These settings apply only to ${where}. Hidden bars come back with /usage-bars.`,
+    cmdHidden: where => `Usage bars hidden in ${where}. Run /usage-bars again to bring them back.`,
+    cmdShown: where => `Usage bars shown again in ${where}.`,
   },
   it: {
     labels: { five_hour: 'Sessione (5h)', seven_day: 'Settimana', spend_limit: 'Spesa' },
@@ -135,6 +149,11 @@ const TEXTS: Record<'en' | 'it', Dict> = {
     compact: 'Compatta',
     reset: 'Ripristina',
     done: 'Fatto',
+    hideHere: 'Nascondi qui',
+    surfaces: { desktop: "nell'app desktop", vscode: 'in VS Code', terminal: 'nel terminale', mobile: "nell'app mobile" },
+    scope: where => `Queste impostazioni valgono solo ${where}. Le barre nascoste si rimettono con /usage-bars.`,
+    cmdHidden: where => `Barre nascoste ${where}. Scrivi di nuovo /usage-bars per rimetterle.`,
+    cmdShown: where => `Barre di nuovo visibili ${where}.`,
   },
 }
 
@@ -146,6 +165,11 @@ function systemLang(): 'en' | 'it' {
   } catch {
     return 'en'
   }
+}
+
+/** Le impostazioni di una superficie; dove non ne ha di sue, quelle comuni. */
+function settingsFor(base: Settings, map: Record<string, Settings>, surface: string | null | undefined): Settings {
+  return (surface ? map[surface] : undefined) ?? base
 }
 
 function dict(lang: Lang): Dict {
@@ -298,7 +322,8 @@ async function ingest($: EngineInterface, rl: readonly Limit[]) {
   await update($, limits, () => rl.map(r => ({ ...r })))
   await update($, samples, prev => sampleAll(prev, rl, now))
 
-  const s = await read($, settings)
+  const surfs = await $.session.surfaces()
+  const s = settingsFor(await read($, settings), await read($, bySurface), surfs[0])
   if (!s.alerts) return
   const t = dict(s.lang)
   const done = await read($, alerted)
@@ -316,10 +341,25 @@ async function ingest($: EngineInterface, rl: readonly Limit[]) {
   if (Object.keys(fresh).length > 0) await update($, alerted, a => ({ ...a, ...fresh }))
 }
 
-async function saveSettings($: EngineInterface, patch: Partial<Settings>) {
-  const nextS = { ...(await read($, settings)), ...patch }
-  await update($, settings, () => nextS)
-  await $.store.set('settings', nextS)
+/** Salva una modifica solo per la superficie indicata. */
+async function saveSettings($: EngineInterface, surface: string, patch: Partial<Settings>) {
+  const map = await read($, bySurface)
+  const nextS = { ...settingsFor(await read($, settings), map, surface), ...patch }
+  const nextMap = { ...map, [surface]: nextS }
+  await update($, bySurface, () => nextMap)
+  await $.store.set('surfaces', nextMap)
+}
+
+/** /usage-bars: nasconde o rimette le barre sulle superfici di questa sessione. */
+async function toggleHidden($: EngineInterface) {
+  const found = await $.session.surfaces()
+  const targets: string[] = found.length > 0 ? [...found] : ['terminal']
+  const first = settingsFor(await read($, settings), await read($, bySurface), targets[0])
+  const hide = !first.hidden
+  for (const surface of targets) await saveSettings($, surface, { hidden: hide })
+  const t = dict(first.lang)
+  const where = targets.map(x => t.surfaces[x] ?? x).join(', ')
+  return { text: hide ? t.cmdHidden(where) : t.cmdShown(where), isTextDisplayOnly: true as const }
 }
 
 export const register: Register = on => {
@@ -331,6 +371,15 @@ export const register: Register = on => {
       const lang: Lang = prev.lang ?? 'it'
       await update($, settings, () => ({ ...DEFAULTS, ...prev, lang }))
     }
+    const perSurface = await $.store.get('surfaces')
+    if (perSurface && typeof perSurface === 'object') {
+      const map: Record<string, Settings> = {}
+      for (const [k, v] of Object.entries(perSurface as Record<string, Partial<Settings>>)) {
+        map[k] = { ...DEFAULTS, ...v }
+      }
+      await update($, bySurface, () => map)
+    }
+    await $.command.register({ name: 'usage-bars', description: 'Show or hide the usage bars here' })
     const usage = await $.session.usage()
     if (usage.rateLimits.length > 0) await ingest($, usage.rateLimits)
     await update($, spend, s => {
@@ -361,6 +410,8 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('command.run', { command: 'usage-bars' }, async $ => toggleHidden($))
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, limits)
     const sp = await read($, spend)
@@ -368,8 +419,10 @@ export const register: Register = on => {
       return next(e)
     }
 
-    const s = await read($, settings)
+    const s = settingsFor(await read($, settings), await read($, bySurface), e.surface)
+    if (s.hidden) return next(e)
     const t = dict(s.lang)
+    const here = e.surface
     const open = await read($, panelOpen)
     const smp = await read($, samples)
     const now = await $.clock.now()
@@ -467,40 +520,43 @@ export const register: Register = on => {
         key={key}
         label={`${isOn ? '✓' : '○'} ${text}`}
         dimColor={!isOn}
-        onPress={() => saveSettings($, patch)}
+        onPress={() => saveSettings($, here, patch)}
       />
     )
 
     const panel = open ? (
       <Box key="panel" flexDirection="column" rowGap={1} marginTop={1}>
+        <Text key="scope" dimColor>
+          {t.scope(t.surfaces[here] ?? here)}
+        </Text>
         <Box key="selects" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1}>
           <Select
             key="sel-color"
             label={t.color}
             value={s.color}
             options={COLOR_VALUES.map((value, i) => ({ value, label: t.colors[i] }))}
-            onSelect={v => void saveSettings($, { color: v })}
+            onSelect={v => void saveSettings($, here, { color: v })}
           />
           <Select
             key="sel-warn"
             label={t.yellowFrom}
             value={String(s.warn)}
             options={[50, 60, 70, 80].map(v => ({ value: String(v), label: `${v}%` }))}
-            onSelect={v => void saveSettings($, { warn: Number(v) })}
+            onSelect={v => void saveSettings($, here, { warn: Number(v) })}
           />
           <Select
             key="sel-crit"
             label={t.redFrom}
             value={String(s.crit)}
             options={[80, 85, 90, 95].map(v => ({ value: String(v), label: `${v}%` }))}
-            onSelect={v => void saveSettings($, { crit: Number(v) })}
+            onSelect={v => void saveSettings($, here, { crit: Number(v) })}
           />
           <Select
             key="sel-width"
             label={t.length}
             value={String(s.width)}
             options={['10', '20', '30'].map((value, i) => ({ value, label: t.lengths[i] }))}
-            onSelect={v => void saveSettings($, { width: Number(v) })}
+            onSelect={v => void saveSettings($, here, { width: Number(v) })}
           />
           {Svg ? null : (
             <Select
@@ -508,7 +564,7 @@ export const register: Register = on => {
               label={t.style}
               value={s.style}
               options={(['block', 'square', 'dot'] as const).map((value, i) => ({ value, label: t.styles[i] }))}
-              onSelect={v => void saveSettings($, { style: v as BarStyle })}
+              onSelect={v => void saveSettings($, here, { style: v as BarStyle })}
             />
           )}
           <Select
@@ -520,7 +576,7 @@ export const register: Register = on => {
               { value: 'en', label: 'English' },
               { value: 'it', label: 'Italiano' },
             ]}
-            onSelect={v => void saveSettings($, { lang: v as Lang })}
+            onSelect={v => void saveSettings($, here, { lang: v as Lang })}
           />
         </Box>
         <Box key="toggles" flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={1}>
@@ -529,7 +585,8 @@ export const register: Register = on => {
           {toggle('t-c', t.thisChat, s.showChat, { showChat: !s.showChat })}
           {toggle('t-a', t.alerts, s.alerts, { alerts: !s.alerts })}
           {toggle('t-k', t.compact, s.compact, { compact: !s.compact })}
-          <Button key="t-reset" label={t.reset} dimColor onPress={() => saveSettings($, { ...DEFAULTS, lang: s.lang })} />
+          <Button key="t-reset" label={t.reset} dimColor onPress={() => saveSettings($, here, { ...DEFAULTS, lang: s.lang })} />
+          <Button key="t-hide" label={t.hideHere} dimColor onPress={() => saveSettings($, here, { hidden: true })} />
           <Button key="t-close" label={t.done} variant="primary" onPress={() => update($, panelOpen, () => false)} />
         </Box>
       </Box>
