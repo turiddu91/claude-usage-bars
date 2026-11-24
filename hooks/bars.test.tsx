@@ -53,7 +53,11 @@ test('impostazioni separate per superficie e /usage-bars', async ($, on) => {
   on('session.surfaces', () => ({ value: ['vscode'] }))
   on('command.register', () => ({ value: undefined }))
   on('clock.now', () => ({ value: Date.parse('2026-11-12T14:30:00Z') }))
-  on('ui.toast', () => ({ value: undefined }))
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => {
+    toasts.push(String(e.text))
+    return { value: undefined }
+  })
   on('store.get', (_, e) => ({ value: e.key === 'settings' ? { lang: 'en' } : undefined }))
   on('store.set', () => ({ value: undefined }))
 
@@ -78,6 +82,19 @@ test('impostazioni separate per superficie e /usage-bars', async ($, on) => {
   await gone.unmount()
 
   const shown = await $.command.run({ command: 'usage-bars' })
+  expect(shown.text).toContain('shown again')
+
+  // "Nascondi qui" dal pannello: le barre spariscono, un avviso spiega come rimetterle,
+  // e /usage-bars le fa tornare.
+  const panel = await $.ui.mount({ ...BAND, surface: 'vscode' })
+  // Il pannello è rimasto aperto dal passo precedente: lo apre solo se è chiuso.
+  if (!(await panel.find({ type: 'Button', key: 't-hide' }))) await panel.press({ key: 'gear' })
+  await panel.press({ key: 't-hide' })
+  expect(await panel.find({ type: 'Button', key: 'gear' })).toBeFalsy()
+  await panel.unmount()
+  expect(toasts.join(' ')).toContain('/usage-bars')
+  const again = await $.command.run({ command: 'usage-bars' })
+  expect(again.text).toContain('shown again')
   expect(shown.text).toContain('shown again')
   const back = await $.ui.mount({ ...BAND, surface: 'vscode' })
   expect(await back.find({ type: 'Button', key: 'gear' })).toBeTruthy()

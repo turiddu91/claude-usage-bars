@@ -350,6 +350,13 @@ async function saveSettings($: EngineInterface, surface: string, patch: Partial<
   await $.store.set('surfaces', nextMap)
 }
 
+/** "Nascondi qui": nasconde le barre e dice subito come rimetterle. */
+async function hideHere($: EngineInterface, surface: string, message: string) {
+  await update($, panelOpen, () => false)
+  await saveSettings($, surface, { hidden: true })
+  $.ui.toast(message)
+}
+
 /** /usage-bars: nasconde o rimette le barre sulle superfici di questa sessione. */
 async function toggleHidden($: EngineInterface) {
   const found = await $.session.surfaces()
@@ -586,7 +593,12 @@ export const register: Register = on => {
           {toggle('t-a', t.alerts, s.alerts, { alerts: !s.alerts })}
           {toggle('t-k', t.compact, s.compact, { compact: !s.compact })}
           <Button key="t-reset" label={t.reset} dimColor onPress={() => saveSettings($, here, { ...DEFAULTS, lang: s.lang })} />
-          <Button key="t-hide" label={t.hideHere} dimColor onPress={() => saveSettings($, here, { hidden: true })} />
+          <Button
+            key="t-hide"
+            label={t.hideHere}
+            dimColor
+            onPress={() => hideHere($, here, t.cmdHidden(t.surfaces[here] ?? here))}
+          />
           <Button key="t-close" label={t.done} variant="primary" onPress={() => update($, panelOpen, () => false)} />
         </Box>
       </Box>
